@@ -1,122 +1,100 @@
 #include "Tournament.h"
-#include <QAbstractItemView>
-#include <QApplication>
-#include <QHeaderView>
-#include <QLabel>
-#include <QLineEdit>
-#include <QObject>
-#include <QPushButton>
-#include <QString>
-#include <QStringList>
-#include <QTableWidget>
-#include <QTableWidgetItem>
-#include <QVBoxLayout>
-#include <QWidget>
+#include "TournamentFileManager.h"
+#include <QtWidgets>
 #include <exception>
 
 int main(int argc, char* argv[]) {
-    // srand(time(0));
-    // int randomNumber1{0};
-    // int randomNumber2{0};
-    // int randomNumber3{0};
-    // int randomNumber4{0};
-
-    // WinDrawLossRule rule;
-    // Tournament tournament(rule);
-
-    // std::string userTeam{"default"};
-    // std::string opponentTeam{"default"};
-
-    // std::cout << "Enter your team to manage: ";
-    // std::cin >> userTeam;
-    // tournament.registerTeam(userTeam);
-
-    // std::vector<std::string> opponents = {};
-    // for (int i = 1; i <= 3; ++i) {
-    //     std::cout << "Enter opponent " << i << "'s name: ";
-    //     std::cin >> opponentTeam;
-    //     opponents.push_back(opponentTeam);
-    //     tournament.registerTeam(opponentTeam);
-    // }
-
-    // for (int i = 0; i < 3; ++i) {
-    //     randomNumber1 = rand() % 5 + 1;
-    //     randomNumber2 = rand() % 5 + 1;
-    //     randomNumber3 = rand() % 5 + 1;
-    //     randomNumber4 = rand() % 5 + 1;
-
-    //     tournament.recordMatch(userTeam, opponents[i], randomNumber1, randomNumber2);
-    //     tournament.recordMatch(opponents[(i + 1 >= 3) ? i - 1 : i + 1], opponents[(i + 2 >= 3) ? (i - 2 < 0 ? 0 : i - 2) : i + 2], randomNumber3, randomNumber4);
-    // }
-
-    // tournament.printStandings();
-
     QApplication app(argc, argv);
-
-    WinDrawLossRule rule;
-    Tournament tournament(rule);
+    WinDrawLossRule drawRule;
+    WinLossRule winRule;
+    Tournament tournament(drawRule);
 
     QWidget window;
-    window.setWindowTitle("Tournament Manager");
-
+    window.setWindowTitle("Tournament Scoreboard");
     QVBoxLayout layout(&window);
 
-    QLabel title("Register a Team");
-    QLineEdit teamInput;
-    teamInput.setPlaceholderText("Enter team name");
-    QPushButton addButton("Add Team");
-    QLabel message("");
+    QLineEdit name;
+    name.setPlaceholderText("Fictional team name");
+    QPushButton add("Register team");
 
+    QComboBox first, second, scoring;
+    scoring.addItems({"Win / Draw / Loss (3 / 1 / 0)", "Win / Loss (3 / 0; draws earn 0)"});
+
+    QSpinBox score1, score2;
+    score1.setRange(0, 1000000); score2.setRange(0, 1000000);
+    QPushButton record("Record match");
+
+    QLineEdit path;
+    path.setPlaceholderText("Full path to tournament JSON file");
+    QPushButton save("Save"), load("Load (replace current tournament)");
+
+    QLabel message;
+    message.setWordWrap(true);
     QTableWidget table(0, 5);
     table.setHorizontalHeaderLabels({"Team", "W", "D", "L", "Points"});
     table.horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     table.setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    layout.addWidget(&title);
-    layout.addWidget(&teamInput);
-    layout.addWidget(&addButton);
-    layout.addWidget(&message);
-    layout.addWidget(&table);
+    QListWidget history;
+    layout.addWidget(new QLabel("1. Register teams"));
+    layout.addWidget(&name); layout.addWidget(&add);
+    layout.addWidget(new QLabel("2. Record a match"));
+    layout.addWidget(&first); layout.addWidget(&score1);
+    layout.addWidget(&second); layout.addWidget(&score2); layout.addWidget(&record);
+    layout.addWidget(new QLabel("3. Compare standings using a scoring rule"));
+    layout.addWidget(&scoring); layout.addWidget(&table);
+    layout.addWidget(new QLabel("Match history")); layout.addWidget(&history);
+    layout.addWidget(&path); layout.addWidget(&save); layout.addWidget(&load); layout.addWidget(&message);
 
-    auto updateStandings = [&]() {
-        try {
-            QString name = teamInput.text().trimmed();
-
-            tournament.registerTeam(name.toStdString());
-
-            const auto& teams = tournament.getTeams();
-            table.setRowCount(static_cast<int>(teams.size()));
-
-            for (int i = 0; i < static_cast<int>(teams.size()); i++) {
-                const Team& team = teams[i];
-
-                QStringList values = {
-                    QString::fromStdString(team.getName()),
-                    QString::number(team.getWins()),
-                    QString::number(team.getDraws()),
-                    QString::number(team.getLosses()),
-                    QString::number(tournament.pointsFor(team))
-                };
-
-                for (int j = 0; j < values.size(); j++) {
-                    table.setItem(i, j, new QTableWidgetItem(values[j]));
-                }
-            }
-
-            message.setText("Team added: " + name);
-            message.setStyleSheet("color: green;");
-            teamInput.clear();
-
-        } catch (const std::exception& error) {
-            message.setText(QString::fromUtf8(error.what()));
-            message.setStyleSheet("color: red;");
+    auto refresh = [&] {
+        auto firstName = first.currentText(), secondName = second.currentText();
+        first.clear(); second.clear();
+        for (const auto& team : tournament.getTeams()) {
+            first.addItem(QString::fromStdString(team.getName())); second.addItem(QString::fromStdString(team.getName()));
         }
+        if (first.findText(firstName) >= 0) first.setCurrentText(firstName);
+        if (second.findText(secondName) >= 0) second.setCurrentText(secondName);
+        table.setRowCount(static_cast<int>(tournament.getTeams().size()));
+        int row = 0;
+        displayItems(tournament.standings(), [&](const Team& team) {
+            QStringList cells{QString::fromStdString(team.getName()), QString::number(team.getWins()),
+                QString::number(team.getDraws()), QString::number(team.getLosses()), QString::number(tournament.pointsFor(team))};
+            for (int col = 0; col < cells.size(); ++col) table.setItem(row, col, new QTableWidgetItem(cells[col]));
+            ++row;
+        });
+        history.clear();
+        displayItems(tournament.getMatches(), [&](const Match& match) {
+            history.addItem(QString("%1 %2 : %3 %4").arg(QString::fromStdString(match.getFirstTeam()))
+                .arg(match.getFirstScore()).arg(match.getSecondScore()).arg(QString::fromStdString(match.getSecondTeam())));
+        });
     };
 
-    QObject::connect(&addButton, &QPushButton::clicked, updateStandings);
-    QObject::connect(&teamInput, &QLineEdit::returnPressed, updateStandings);
+    auto perform = [&](auto action, const QString& success) {
+        try { action(); refresh(); message.setText(success); message.setStyleSheet("color: darkgreen"); }
+        catch (const std::exception& error) { message.setText(QString::fromUtf8(error.what())); message.setStyleSheet("color: firebrick"); }
+    };
+    auto registerTeam = [&] { perform([&] { tournament.registerTeam(name.text().trimmed().toStdString()); name.clear(); }, "Team registered."); };
 
-    window.resize(600, 400);
+    QObject::connect(&add, &QPushButton::clicked, registerTeam);
+    QObject::connect(&name, &QLineEdit::returnPressed, registerTeam);
+    QObject::connect(&record, &QPushButton::clicked, [&] { perform([&] {
+        tournament.recordMatch(first.currentText().toStdString(), second.currentText().toStdString(), score1.value(), score2.value());
+    }, "Match recorded."); });
+    
+    QObject::connect(&scoring, &QComboBox::currentIndexChanged, [&](int index) { perform([&] {
+        const ScoringRule& selected = index == 0 ? static_cast<const ScoringRule&>(drawRule) : static_cast<const ScoringRule&>(winRule);
+        tournament.setRule(selected);
+    }, "Standings recalculated."); });
+
+    QObject::connect(&save, &QPushButton::clicked, [&] { perform([&] { 
+        TournamentFileManager::save(tournament, path.text()); 
+    }, "Saved."); });
+
+    QObject::connect(&load, &QPushButton::clicked, [&] { perform([&] { 
+        TournamentFileManager::load(tournament, path.text()); 
+    }, "Loaded. Scoring rule selection is unchanged."); });
+    
+    window.resize(740, 850);
     window.show();
 
     return app.exec();

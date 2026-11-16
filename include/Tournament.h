@@ -55,6 +55,10 @@ class Tournament {
     public:
         explicit Tournament(const ScoringRule& scoringRule);
         void registerTeam(const std::string& name);
+        void registerTeam(const Team& team);
+        void setRule(const ScoringRule& rule);
+        std::vector<Team> standings() const;
+        void replaceData(Tournament& other) noexcept;
         void recordMatch(const std::string& first, const std::string& second, int score1, int score2);
         void printStandings() const;
         const std::vector<Team>& getTeams() const;
@@ -64,6 +68,11 @@ class Tournament {
     private:
         std::vector<Team> m_teams;
         std::vector<Match> m_matches;
-        const ScoringRule& m_rule;
+        const ScoringRule* m_rule;
         int findTeam(const std::string& name) const;
 };
+
+template<typename T, typename Render>
+void displayItems(const std::vector<T>& items, Render render) {
+    for (const T& item : items) render(item);
+}
