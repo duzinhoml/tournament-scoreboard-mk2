@@ -1,0 +1,25 @@
+# Binaries and object files
+build/
+bin/
+*.o
+*.obj
+*.exe
+*.out
+*.app
+scoreboard
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# IDE and Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Qt / Qt Creator files
+*.pro.user
+*.pro.user.*
+.qmake.stash
+build-*
